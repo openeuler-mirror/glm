@@ -1,0 +1,316 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 843e754..bc7a745 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,13 +3,26 @@ cmake_policy(VERSION 3.2)
+ 
+ set(GLM_VERSION "0.9.9")
+ project(glm VERSION ${GLM_VERSION} LANGUAGES CXX)
+-enable_testing()
++message(STATUS "GLM: Version " ${GLM_VERSION})
+ 
+ add_subdirectory(glm)
+ add_library(glm::glm ALIAS glm)
+ 
+ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
+ 
+-add_subdirectory(test)
++	include(CPack)
++	install(DIRECTORY glm DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} PATTERN "CMakeLists.txt" EXCLUDE)
++	install(EXPORT glm FILE glmConfig.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/glm NAMESPACE glm::)
++	include(CMakePackageConfigHelpers)
++	write_basic_package_version_file("glmConfigVersion.cmake" COMPATIBILITY AnyNewerVersion)
++	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/glmConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/glm)
++
++    configure_file(glm.pc.in glm.pc @ONLY)
++	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/glm.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
++
++	include(CTest)
++	if(BUILD_TESTING)
++		add_subdirectory(test)
++	endif()
+ 
+ endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
+diff --git a/cmake/glm/glmConfig-version.cmake b/cmake/glm/glmConfig-version.cmake
+deleted file mode 100644
+index 6e63a4a..0000000
+--- a/cmake/glm/glmConfig-version.cmake
++++ /dev/null
+@@ -1,11 +0,0 @@
+-if(${PACKAGE_FIND_VERSION_MAJOR} EQUAL 0)
+-    if (${PACKAGE_FIND_VERSION} VERSION_LESS ${GLM_VERSION})
+-        set(PACKAGE_VERSION_COMPATIBLE 1)  
+-    endif()
+-    if(${PACKAGE_FIND_VERSION} VERSION_EQUAL ${GLM_VERSION})
+-        set(PACKAGE_VERSION_EXACT 1)  
+-    endif()
+-else()
+-    set(PACKAGE_VERSION_UNSUITABLE 1)
+-endif()
+-
+diff --git a/cmake/glm/glmConfig.cmake b/cmake/glm/glmConfig.cmake
+deleted file mode 100644
+index 4fba511..0000000
+--- a/cmake/glm/glmConfig.cmake
++++ /dev/null
+@@ -1,22 +0,0 @@
+-cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+-cmake_policy(VERSION 3.2)
+-
+-set(GLM_VERSION 0.9.9)
+-
+-get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_FILE}" PATH)
+-get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+-get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+-if (_IMPORT_PREFIX STREQUAL "/")
+-  set(_IMPORT_PREFIX "")
+-endif()
+-
+-# Set the old GLM_INCLUDE_DIRS variable for backwards compatibility
+-set(GLM_INCLUDE_DIRS ${_IMPORT_PREFIX})
+-
+-add_library(glm::glm INTERFACE IMPORTED)
+-set_target_properties(glm::glm PROPERTIES
+-    INTERFACE_INCLUDE_DIRECTORIES ${GLM_INCLUDE_DIRS})
+-
+-mark_as_advanced(glm_DIR)
+-set(_IMPORT_PREFIX)
+-
+diff --git a/glm.pc.in b/glm.pc.in
+new file mode 100644
+index 0000000..da8a615
+--- /dev/null
++++ b/glm.pc.in
+@@ -0,0 +1,7 @@
++prefix=@CMAKE_INSTALL_PREFIX@
++includedir=${prefix}/include
++
++Name: GLM
++Description: OpenGL Mathematics
++Version: @GLM_VERSION@
++Cflags: -I${includedir}
+\ No newline at end of file
+diff --git a/glm/CMakeLists.txt b/glm/CMakeLists.txt
+index 4ff51c8..cee0d2e 100644
+--- a/glm/CMakeLists.txt
++++ b/glm/CMakeLists.txt
+@@ -43,7 +43,15 @@ source_group("SIMD Files" FILES ${SIMD_INLINE})
+ source_group("SIMD Files" FILES ${SIMD_HEADER})
+ 
+ add_library(glm INTERFACE)
+-target_include_directories(glm INTERFACE ../)
++
++include(GNUInstallDirs)
++
++target_include_directories(glm INTERFACE
++	$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
++	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
++)
++
++install(TARGETS glm EXPORT glm)
+ 
+ if(BUILD_STATIC_LIBS)
+ add_library(glm_static STATIC ${ROOT_TEXT} ${ROOT_MD} ${ROOT_NAT}
+diff --git a/glm/gtc/packing.inl b/glm/gtc/packing.inl
+index 8c906e1..c550140 100644
+--- a/glm/gtc/packing.inl
++++ b/glm/gtc/packing.inl
+@@ -9,6 +9,9 @@
+ #include "../detail/type_half.hpp"
+ #include <cstring>
+ #include <limits>
++extern "C" {
++#include <endian.h>
++}
+ 
+ namespace glm{
+ namespace detail
+@@ -183,9 +186,15 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			uint x : 3;
+ 			uint y : 3;
+ 			uint z : 2;
++#else
++			uint z : 2;
++			uint y : 3;
++			uint x : 3;
++#endif
+ 		} data;
+ 		uint8 pack;
+ 	};
+@@ -194,8 +203,13 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			uint x : 4;
+ 			uint y : 4;
++#else
++			uint y : 4;
++			uint x : 4;
++#endif
+ 		} data;
+ 		uint8 pack;
+ 	};
+@@ -204,10 +218,17 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			uint x : 4;
+ 			uint y : 4;
+ 			uint z : 4;
+ 			uint w : 4;
++#else
++			uint w : 4;
++			uint z : 4;
++			uint y : 4;
++			uint x : 4;
++#endif
+ 		} data;
+ 		uint16 pack;
+ 	};
+@@ -216,9 +237,15 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			uint x : 5;
+ 			uint y : 6;
+ 			uint z : 5;
++#else
++			uint z : 5;
++			uint y : 6;
++			uint x : 5;
++#endif
+ 		} data;
+ 		uint16 pack;
+ 	};
+@@ -227,10 +254,17 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			uint x : 5;
+ 			uint y : 5;
+ 			uint z : 5;
+ 			uint w : 1;
++#else
++			uint w : 1;
++			uint z : 5;
++			uint y : 5;
++			uint x : 5;
++#endif
+ 		} data;
+ 		uint16 pack;
+ 	};
+@@ -239,10 +273,17 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			uint x : 10;
+ 			uint y : 10;
+ 			uint z : 10;
+ 			uint w : 2;
++#else
++			uint w : 2;
++			uint z : 10;
++			uint y : 10;
++			uint x : 10;
++#endif
+ 		} data;
+ 		uint32 pack;
+ 	};
+@@ -251,10 +292,17 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			int x : 10;
+ 			int y : 10;
+ 			int z : 10;
+ 			int w : 2;
++#else
++			int w : 2;
++			int z : 10;
++			int y : 10;
++			int x : 10;
++#endif
+ 		} data;
+ 		uint32 pack;
+ 	};
+@@ -263,10 +311,17 @@ namespace detail
+ 	{
+ 		struct
+ 		{
++#if BYTE_ORDER == LITTLE_ENDIAN
+ 			uint x : 9;
+ 			uint y : 9;
+ 			uint z : 9;
+ 			uint w : 5;
++#else
++			uint w : 5;
++			uint z : 9;
++			uint y : 9;
++			uint x : 9;
++#endif
+ 		} data;
+ 		uint32 pack;
+ 	};
+diff --git a/manual.md b/manual.md
+index a7f6956..d53df3d 100644
+--- a/manual.md
++++ b/manual.md
+@@ -277,7 +277,26 @@ GLM does not depend on external libraries or headers such as `<GL/gl.h>`, [`<GL/
+ 
+ ### <a name="section1_5"></a> 1.5. Finding GLM with CMake
+ 
+-GLM packages a `glmConfig.cmake` and `glmConfig-version.cmake` in the root of the repository and the release archives. To find GLM with CMake you can pass `-Dglm_DIR=<path to glm root>/cmake/glm/` when running CMake. You can then either add `${GLM_INCLUDE_DIRS}` to your target's include directories, or link against the imported `glm::glm` target.
++When installed, GLM provides the CMake package configuration files `glmConfig.cmake` and `glmConfigVersion.cmake`.
++
++To use these configurations files, you may need to set the `glm_DIR` variable to the directory containing the configuration files `<installation prefix>/lib/cmake/glm/`.
++
++Use the `find_package` CMake command to load the configurations into your project. Lastly, either link your executable against the `glm::glm` target or add `${GLM_INCLUDE_DIRS}` to your target's include directories:
++
++```cmake
++set(glm_DIR <installation prefix>/lib/cmake/glm) # if necessary
++find_package(glm REQUIRED)
++target_link_libraries(<your executable> glm::glm)
++```
++
++To use GLM as a submodule in a project instead, use `add_subdirectory` to expose the same target, or add the directory to your target's 
++
++```cmake
++add_subdirectory(glm)
++target_link_libraries(<your executable> glm::glm)
++# or
++target_include_directories(<your executable> glm)
++```
+ 
+ ---
+ <div style="page-break-after: always;"> </div>
+diff --git a/test/gtc/gtc_packing.cpp b/test/gtc/gtc_packing.cpp
+index df5b3bb..fbaaa5b 100644
+--- a/test/gtc/gtc_packing.cpp
++++ b/test/gtc/gtc_packing.cpp
+@@ -4,6 +4,7 @@
+ #include <glm/ext/vector_relational.hpp>
+ #include <cstdio>
+ #include <vector>
++#include <arpa/inet.h>
+ 
+ void print_bits(float const& s)
+ {
+@@ -156,7 +157,7 @@ int test_U3x10_1x2()
+ 
+ 	glm::u8vec4 const v0(0xff, 0x77, 0x0, 0x33);
+ 	glm::uint32 const p0 = *reinterpret_cast<glm::uint32 const*>(&v0[0]);
+-	glm::uint32 const r0 = 0x330077ff;
++	glm::uint32 const r0 = htonl(0xff770033);
+ 
+ 	Error += p0 == r0 ? 0 : 1;
+ 
